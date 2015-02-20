@@ -32,6 +32,8 @@
 #define LOG_OPTION     LOG_PERROR|LOG_PID
 #define LOG_FACILITY   LOG_LOCAL2
 
+static char nas_prefix[IFNAMSIZ] = "nas";
+
 struct br2684_params {
   int itfnum;
   int encap;
@@ -71,7 +73,7 @@ int create_pidfile(int num)
 
   if (num < 0) return -1;
 
-  snprintf(name, 32, "/var/run/br2684ctl-nas%d.pid", num);
+  snprintf(name, 32, "/var/run/br2684ctl-%s%d.pid", nas_prefix, num);
   pidfile = fopen(name, "w");
   if (pidfile == NULL) return -1;
   fprintf(pidfile, "%d", getpid());
@@ -100,7 +102,7 @@ int create_br(int itfnum, int payload)
         ni.media |= BR2684_FLAG_ROUTED;
 #endif
       ni.mtu = 1500;
-      sprintf(ni.ifname, "nas%d", itfnum);
+      sprintf(ni.ifname, "%s%d", nas_prefix, itfnum);
       err=ioctl (lastsock, ATM_NEWBACKENDIF, &ni);
   
       if (err == 0)
@@ -165,7 +167,7 @@ int assign_vcc(char *astr, int encap, int payload,
     
     be.backend_num = ATM_BACKEND_BR2684;
     be.ifspec.method = BR2684_FIND_BYIFNAME;
-    sprintf(be.ifspec.spec.ifname, "nas%d", lastitf);
+    sprintf(be.ifspec.spec.ifname, "%s%d", nas_prefix, lastitf);
     be.fcs_in = BR2684_FCSIN_NO;
     be.fcs_out = BR2684_FCSOUT_NO;
     be.fcs_auto = 0;
@@ -198,7 +200,7 @@ void start_interface(struct br2684_params* params)
 
 void usage(char *s)
 {
-  printf("usage: %s [-b] [[-c number] [-e 0|1] [-s sndbuf] [-q qos] [-p 0|1] "
+  printf("usage: %s [-b] [[-c number] [-i prefix] [-e 0|1] [-s sndbuf] [-q qos] [-p 0|1] "
 	 "[-a [itf.]vpi.vci]*]*\n", s);
   printf("  encapsulations: 0=llc, 1=vcmux\n  payloads: 0=routed, 1=bridged\n");
   exit(1);
@@ -225,10 +227,10 @@ int main (int argc, char **argv)
 
   openlog (LOG_NAME,LOG_OPTION,LOG_FACILITY);
   if (argc>1)
-    while ((c = getopt(argc, argv,"q:a:bc:e:s:p:?h")) !=EOF)
+    while ((c = getopt(argc, argv,"q:a:bc:e:s:p:i:?h")) !=EOF)
       switch (c) {
       case 'q':
-	printf ("optarg : %s",optarg);
+	printf ("optarg : %s\n",optarg);
 	if (text2qos(optarg,&params.reqqos,0))
 	  fprintf(stderr,"QOS parameter invalid\n");
 	break;
@@ -242,6 +244,9 @@ int main (int argc, char **argv)
 	/* temporary, to make it work with multiple interfaces: */
 	if (params.itfnum>=0) start_interface(&params);
 	params.itfnum= atoi(optarg);
+	break;
+	  case 'i':
+	strncpy(nas_prefix, optarg, IFNAMSIZ-3);
 	break;
       case 'e':
 	params.encap=(atoi(optarg));
